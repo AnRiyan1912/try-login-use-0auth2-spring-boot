@@ -1,4 +1,4 @@
-package com.enigma.try0auth2.controller;
+package com.enigma.try0auth2.controllers;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -13,7 +13,6 @@ public class User {
 
     @GetMapping("/")
     public Object loginGoogle(Authentication authentication) {
-        System.out.println(authentication.getPrincipal());
         return authentication.getPrincipal();
     }
 }

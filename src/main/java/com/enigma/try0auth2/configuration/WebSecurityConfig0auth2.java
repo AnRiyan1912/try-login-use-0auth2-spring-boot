@@ -1,37 +1,63 @@
 package com.enigma.try0auth2.configuration;
 
+import com.enigma.try0auth2.entities.User;
+import com.enigma.try0auth2.services.OAuth2Service;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.oauth2.client.registration.ClientRegistration;
-import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
-import org.springframework.security.oauth2.client.registration.InMemoryClientRegistrationRepository;
-import org.springframework.security.oauth2.core.AuthorizationGrantType;
-import org.springframework.security.oauth2.core.ClientAuthenticationMethod;
-import org.springframework.security.oauth2.core.oidc.IdTokenClaimNames;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
+import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
+import org.springframework.security.oauth2.client.userinfo.OAuth2UserRequest;
+import org.springframework.security.oauth2.core.user.OAuth2User;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 
-@Configuration
+import java.io.IOException;
+
+
 @RequiredArgsConstructor
+@Slf4j
+@Configuration
 public class WebSecurityConfig0auth2 {
-    @Bean
-    public ClientRegistrationRepository clientRegistrationRepository() {
-        return new InMemoryClientRegistrationRepository(this.googleClientRegistration());
-    }
 
-    public ClientRegistration googleClientRegistration() {
-        return ClientRegistration.withRegistrationId("google")
-                .clientId("1027961864130-7p34ei3tlpjn5ohastsjki7v8619g0ea.apps.googleusercontent.com")
-                .clientSecret("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")
-                .clientAuthenticationMethod(ClientAuthenticationMethod.CLIENT_SECRET_BASIC)
-                .authorizationGrantType(AuthorizationGrantType.AUTHORIZATION_CODE)
-                .redirectUri("{baseUrl}/login/oauth2/code/{registrationId}")
-                .scope("openid", "profile", "email", "address", "phone")
-                .authorizationUri("https://accounts.google.com/o/oauth2/v2/auth")
-                .tokenUri("https://www.googleapis.com/oauth2/v4/token")
-                .userInfoUri("https://www.googleapis.com/oauth2/v3/userinfo")
-                .userNameAttributeName(IdTokenClaimNames.SUB)
-                .jwkSetUri("https://www.googleapis.com/oauth2/v3/certs")
-                .clientName("Google")
+    private final OAuth2Service oAuth2Service;
+
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+        log.trace("Configuring SecurityFilterChain");
+        return http.authorizeHttpRequests(authorize -> {
+                    authorize.anyRequest().authenticated();
+                })
+                .oauth2Login(oauth2 -> oauth2.userInfoEndpoint(userInfoEndpointConfig -> userInfoEndpointConfig.userService(oAuth2Service)).successHandler(new AuthenticationSuccessHandler() {
+                            @Override
+                            public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
+                                if (authentication instanceof OAuth2AuthenticationToken) {
+                                    OAuth2AuthenticationToken oauthToken = (OAuth2AuthenticationToken) authentication;
+                                    OAuth2User oauthUser = oauthToken.getPrincipal();
+                                    User findUser = oAuth2Service.findUserByEmail(oauthUser.getAttribute("email"));
+                                    if (findUser != null) {
+                                        oAuth2Service.updateExistingUser(findUser, oauthUser);
+                                    } else {
+                                        oAuth2Service.registerNewUser(((OAuth2AuthenticationToken) authentication).getAuthorizedClientRegistrationId(), oauthUser);
+                                    }
+                                } else {
+
+
+                                }
+
+                            }
+                        })
+                )
                 .build();
+
     }
 }
